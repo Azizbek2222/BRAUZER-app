@@ -194,6 +194,21 @@
         cursor: pointer;
     }
 
+   /* index.html style bloki ichiga qo'shing */
+.games-btn {
+    padding: 8px 15px;
+    background: #FF5722; /* To'q sariq/Qizil rang */
+    color: white; 
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    box-shadow: 0 2px 5px rgba(255, 87, 34, 0.4);
+    cursor: pointer;
+    transition: background 0.3s;
+    margin-top: 5px; /* Reyting tugmasidan biroz pastda turishi uchun */
+}
+
+
     /* === Status Bloklari Stili === */
     .status-container {
         display: flex;
@@ -259,12 +274,16 @@
     </div>
     
     <div class="button-group">
-        <button class="withdraw-btn" onclick="location.href='withdraw.html'">Withdraw</button>
-        <button class="tasks-btn" onclick="location.href='task.html'">Tasks</button>
-        <button class="referral-btn" onclick="location.href='referal.html'">Referral</button>
-        <button class="leaderboard-btn" onclick="location.href='reyting.html'">Reyting</button>
-    </div>
+    <button class="withdraw-btn" onclick="location.href='withdraw.html'">Withdraw</button>
+    <button class="tasks-btn" onclick="location.href='task.html'">Tasks</button>
+    <button class="referral-btn" onclick="location.href='referal.html'">Referral</button>
+    <button class="leaderboard-btn" onclick="location.href='reyting.html'">Reyting</button>
+    
+    <button class="action-btn games-btn" onclick="location.href='games.html'">🎮 O'yinlar Markazi</button>
 </div>
+
+</div>
+
 
 <div class="main-content">
     <div class="rocket-container">
