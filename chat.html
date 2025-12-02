@@ -40,6 +40,7 @@
         display: flex;
         flex-direction: column;
         max-width: 85%;
+        position: relative; /* Reply tugmasini joylashtirish uchun */
     }
     .message-content {
         padding: 10px 15px;
@@ -106,15 +107,90 @@
         color: #cc8000; /* Admin nikining rangi */
     }
 
+    /* === YANGI: REPLY BLOKI STILI === */
+    .reply-block {
+        background: rgba(0, 0, 0, 0.05); /* Yengil kulrang fon */
+        border-left: 3px solid #007bff; /* Moviy chiziq */
+        padding: 5px 10px;
+        border-radius: 4px;
+        margin-bottom: 5px;
+        font-size: 13px;
+        color: #666;
+        max-height: 50px;
+        overflow: hidden; /* Matn o'chmasligi uchun */
+        text-overflow: ellipsis; 
+    }
+    .message-mine .reply-block {
+        border-left: 3px solid #00c16e; /* Yuborgan xabar uchun yashil chiziq */
+        color: #ddd; /* O'z xabarimizda yengil rang */
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    /* === YANGI: REPLY TUGMASI STILI === */
+    .reply-btn {
+        position: absolute;
+        top: 0;
+        right: -30px; /* Xabar blokidan tashqarida */
+        background: transparent;
+        border: none;
+        color: #555;
+        font-size: 16px;
+        cursor: pointer;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+        padding: 5px;
+    }
+    .message-mine .reply-btn {
+        left: -30px; /* O'z xabarlarim chapda ko'rinadi */
+        right: auto;
+    }
+    .reply-btn:hover {
+        opacity: 1;
+    }
+    /* ================================= */
+
 
     /* Input maydoni */
-    .chat-input {
+    .chat-input-container {
         display: flex;
-        padding: 10px;
+        flex-direction: column;
+        padding: 0 10px 10px;
         background: white;
         border-top: 1px solid #ddd;
         border-radius: 0 0 12px 12px;
         box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    }
+
+    .replying-to-indicator {
+        display: none; /* Standart holatda yashirin */
+        background: #f0f0f0;
+        padding: 8px 10px;
+        border-left: 4px solid #007bff;
+        font-size: 13px;
+        color: #333;
+        margin: 10px 0 0;
+        border-radius: 4px;
+        position: relative;
+    }
+    .replying-to-indicator.active {
+        display: block;
+    }
+    .clear-reply-btn {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #999;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 16px;
+    }
+
+    .chat-input {
+        display: flex;
+        padding-top: 10px;
     }
     #message-input {
         flex-grow: 1;
@@ -172,9 +248,16 @@
     <ul id="chat-messages">
         </ul>
     
-    <div class="chat-input">
-        <input type="text" id="message-input" placeholder="Xabar yozish..." onkeyup="checkEnter(event)">
-        <button id="send-btn" onclick="sendMessage()">Yuborish</button>
+    <div class="chat-input-container">
+        <div class="replying-to-indicator" id="reply-indicator">
+            Javob: <span id="reply-text"></span> 
+            <button class="clear-reply-btn" onclick="clearReply()">✖</button>
+        </div>
+        
+        <div class="chat-input">
+            <input type="text" id="message-input" placeholder="Xabar yozish..." onkeyup="checkEnter(event)">
+            <button id="send-btn" onclick="sendMessage()">Yuborish</button>
+        </div>
     </div>
 </div>
 <button class="back-btn" onclick="location.href='index.html'">Orqaga</button>
@@ -208,13 +291,34 @@ if(!deviceId){
     localStorage.setItem("deviceId", deviceId);
 }
 
+// === YANGI: REPLY HOLATINI SAQLASH UCHUN GLOBAL O'ZGARUVCHILAR ===
+let replyingToId = null;
+let replyingToText = null;
+
 // === CONSTANTS ===
 // Tasdiqlangan galochka rasmi (yashil)
 const VERIFIED_ICON_URL = "galochka.png";
 
+// === REPLY FUNKSIYALARI ===
+window.setReply = function(id, text) {
+    replyingToId = id;
+    replyingToText = text;
+    document.getElementById('reply-text').innerText = text.substring(0, 50) + (text.length > 50 ? '...' : ''); // Matnni qisqartirish
+    document.getElementById('reply-indicator').classList.add('active');
+    document.getElementById('message-input').focus();
+}
+
+window.clearReply = function() {
+    replyingToId = null;
+    replyingToText = null;
+    document.getElementById('reply-text').innerText = '';
+    document.getElementById('reply-indicator').classList.remove('active');
+}
+
+
 // === CHAT MANTIQI ===
 
-function renderMessage(message, isMine) {
+function renderMessage(key, message, isMine) {
     const chatMessagesEl = document.getElementById('chat-messages');
     
     const li = document.createElement('li');
@@ -241,8 +345,16 @@ function renderMessage(message, isMine) {
 
     li.classList.add(bubbleClass);
     // --------------------------------------------------------
+    
+    let replyHtml = '';
+    if (message.replyToText) {
+        // Javob berilgan xabarni ko'rsatish
+        replyHtml = `<div class="reply-block">Javob berilgan: ${message.replyToText.substring(0, 40) + (message.replyToText.length > 40 ? '...' : '')}</div>`;
+    }
 
     li.innerHTML = `
+        <button class="reply-btn" onclick="setReply('${key}', '${message.text.replace(/'/g, "\\'")}')">↪</button>
+        ${replyHtml}
         <span class="message-user">${usernameDisplay}</span>
         <div class="message-content">${message.text}</div>
     `;
@@ -264,12 +376,16 @@ window.sendMessage = function() {
         username: deviceId.substring(0, 8), // Nik sifatida ID ning qismini ishlatamiz
         text: messageText,
         timestamp: serverTimestamp(),
-        isAdmin: false // Oddiy foydalanuvchi
+        isAdmin: false, // Oddiy foydalanuvchi
+        // Reply ma'lumotlarini qo'shish
+        replyToId: replyingToId,
+        replyToText: replyingToText
     };
 
     push(chatRef, newMessage)
         .then(() => {
             inputEl.value = ''; // Yuborilgandan keyin maydonni tozalash
+            clearReply(); // Reply holatini tozalash
         })
         .catch(error => {
             console.error("Xabar yuborishda xato:", error);
@@ -292,10 +408,11 @@ onValue(messagesQuery, (snapshot) => {
     chatMessagesEl.innerHTML = ''; // Listni tozalash
 
     snapshot.forEach((childSnapshot) => {
+        const messageKey = childSnapshot.key; // Xabarning ID sini olish
         const message = childSnapshot.val();
         // Foydalanuvchining o'z xabarimi?
         const isMine = message.user_id === deviceId && !message.isAdmin; 
-        renderMessage(message, isMine);
+        renderMessage(messageKey, message, isMine);
     });
 });
 </script>
