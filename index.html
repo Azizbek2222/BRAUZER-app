@@ -354,6 +354,46 @@ body {
     }
 
 
+        /* === YANGI: YANGILASH TUGMASI STILI === */
+    .refresh-btn {
+        background: #4CAF50; /* Yashil rang */
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px; /* Kichikroq qilingan */
+        height: 40px; /* Kichikroq qilingan */
+        font-size: 18px;
+        line-height: 40px;
+        text-align: center;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        transition: background 0.3s;
+        /* Faqat Flex item bo'lsa kerak */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+    
+    .refresh-btn:hover {
+        background: #45a049;
+    }
+
+    /* top-bar ichidagi joylashuvni boshqarish uchun */
+    .top-bar {
+        display: flex;
+        justify-content: space-between; /* Elementlarni ikki chetga surish */
+        align-items: center;
+    }
+    
+    /* Tugmalar guruhini yaratish (ixtiyoriy, lekin tartibni yaxshilaydi) */
+    .action-buttons {
+        display: flex;
+        gap: 10px; /* Tugmalar orasidagi masofa */
+    }
+
+
+
 
 </style>
 
@@ -366,15 +406,19 @@ body {
         <div class="balance-value" id="balance">0 so'm</div>
     </div>
     
-    <div class="chat-btn-container">
-        <a href="chat.html" class="chat-btn">
-            <span>💬</span> 
-        </a>
+    <div class="action-buttons">
+        <button class="refresh-btn" onclick="location.reload()">
+            🔄
+        </button>
+
+        <div class="chat-btn-container" style="position: static;">
+            <a href="chat.html" class="chat-btn">
+                <span>💬</span> 
+            </a>
+        </div>
     </div>
     </div>
 
-    
-    </div>
 
 
 <div class="main-content">
