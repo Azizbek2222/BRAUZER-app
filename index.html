@@ -453,7 +453,7 @@ const clouds = [document.getElementById("cloud1"), document.getElementById("clou
 let remainingTime = 0;
 const TIMER_SECONDS = 300; // 5 daqiqa
 // === O'ZGARTIRILGAN QATOR ===
-const MINING_REWARD = 10.00; // 10 so'm
+const MINING_REWARD = 20.00; // 20 so'm
 // =============================
 const REWARD_PER_SECOND = MINING_REWARD / TIMER_SECONDS; 
 const DECREMENT_RATE = 100 / TIMER_SECONDS; 
@@ -465,7 +465,7 @@ let referrerId = null;
 // === ADSGRAM/ADSONAR Funksiyalari (Refuel va Shield uchun) ===
 
 function onRefillComplete(resource) {
-    const refillAmount = 50; // Har safar 50% to'ldiriladi
+    const refillAmount = 20; // Har safar 50% to'ldiriladi
     
     if (resource === 'fuel') {
         // Yoqilg'ini faqat 100% gacha to'ldirish
