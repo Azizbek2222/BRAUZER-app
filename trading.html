@@ -500,38 +500,50 @@
             candlestickChartEl.innerHTML = ''; 
             
             const chartHeightPx = 250; 
-            const scaleFactor = chartHeightPx / PRICE_RANGE;
+            const scaleFactor = chartHeightPx / PRICE_RANGE; 
 
             candleData.forEach(candle => {
                 const candleEl = document.createElement('div');
                 candleEl.classList.add('candlestick');
                 
-                const isUp = candle.close > candle.open;
+                const isUp = candle.close >= candle.open;
                 candleEl.classList.add(isUp ? 'up' : 'down');
                 
+                // === KANDELNI TO'G'RI CHIZISH UCHUN YANGILANGAN MANTIQ ===
+                
+                // 1. Kandel tanasi (Body)
                 const bodyHeight = Math.abs(candle.close - candle.open) * scaleFactor;
-                const bodyBottomPrice = isUp ? candle.open : candle.close;
-                const bodyBottomPosition = (bodyBottomPrice - MIN_PRICE) * scaleFactor;
+                const bodyBottomPrice = Math.min(candle.open, candle.close); 
+                
+                // Body ni grafikdagi joylashuvi (eng past MIN_PRICE ga nisbatan)
+                // Bu pozitsiya 0.0100 dan necha pixel yuqorida bo'lishini belgilaydi.
+                const bodyBottomPosition = (bodyBottomPrice - MIN_PRICE) * scaleFactor; 
 
                 const bodyEl = document.createElement('div');
                 bodyEl.classList.add('body');
+                // Balandligi: 1px dan kam bo'lmasligi kerak
                 bodyEl.style.height = Math.max(1, bodyHeight) + 'px'; 
-                bodyEl.style.bottom = bodyBottomPosition + 'px';
+                // Pastki qismning joylashuvi
+                bodyEl.style.bottom = bodyBottomPosition + 'px'; 
                 
+                // 2. Kandel ipi (Wick)
                 const wickEl = document.createElement('div');
                 wickEl.classList.add('wick');
                 
                 const wickHeight = (candle.high - candle.low) * scaleFactor;
-                const wickBottomPosition = (candle.low - MIN_PRICE) * scaleFactor;
+                const wickBottomPosition = (candle.low - MIN_PRICE) * scaleFactor; 
                 
                 wickEl.style.height = wickHeight + 'px';
-                wickEl.style.bottom = wickBottomPosition + 'px';
+                wickEl.style.bottom = wickBottomPosition + 'px'; 
                 
+                // ==========================================================
+
                 candleEl.appendChild(wickEl);
                 candleEl.appendChild(bodyEl);
                 candlestickChartEl.appendChild(candleEl);
             });
             
+            // Eng so'nggi kandelni ko'rsatish uchun gorizontal aylantirish
             candlestickChartEl.scrollLeft = candlestickChartEl.scrollWidth;
         }
 
