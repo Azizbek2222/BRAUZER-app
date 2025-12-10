@@ -102,6 +102,34 @@ body {
     box-shadow: 0 0 15px rgba(58, 117, 183, 0.5); /* Yengil neon soya */
 }
 
+/* --- YANGI QO'SHILGAN ONLAYN HOLAT STILI --- */
+.online-box {
+    /* Balans qutisini koinot mavzusiga moslashtirish */
+    background: #1a237e; /* To'q ko'k fon */
+    padding: 10px 15px;
+    border-radius: 12px;
+    box-shadow: 0 0 10px #4fc3f7, 0 0 20px rgba(79, 195, 247, 0.3); /* Yorqin ko'k soya */
+    display: inline-block;
+    text-align: left;
+    border: 1px solid #4fc3f7;
+    margin-right: 10px; /* Balans va Onlayn qutilarni ajratish */
+    order: 2; /* Action buttons dan oldin turishi uchun */
+}
+
+.online-title {
+    font-size: 13px;
+    color: #bbdefb; /* Oq matnga nisbatan yengil rang */
+    text-transform: uppercase;
+}
+
+.online-value {
+    font-size: 22px;
+    font-weight: bold;
+    margin-top: 2px;
+    color: #ffd700; /* Yorqin Oltin rang */
+}
+
+/* --- YANGILANAYOTGAN BALANCE QUTISINING STILI --- */
 .balance-box {
     /* Balans qutisini koinot mavzusiga moslashtirish */
     background: #1a237e; /* To'q ko'k fon */
@@ -111,6 +139,7 @@ body {
     display: inline-block;
     text-align: left;
     border: 1px solid #4fc3f7;
+    order: 1; /* Birinchi turishi uchun */
 }
 
 .balance-title {
@@ -130,7 +159,17 @@ body {
     display: flex;
     gap: 10px;
     align-items: center;
+    order: 3; /* Oxirida turishi uchun */
 }
+
+/* Yuqori Panelni markazga joylash uchun flex container qo'shish */
+.top-left-container {
+    display: flex;
+    align-items: center;
+    order: 1; /* chap tomonda turishi uchun */
+}
+/* --- YANGI QO'SHILGAN ONLAYN HOLAT STILI TUGADI --- */
+
 
 /* === Chat va Yangilash Tugmalari Stili === */
 .refresh-btn, .chat-btn {
@@ -369,9 +408,16 @@ body {
 <body>
 
 <div class="top-bar">
-    <div class="balance-box">
-        <div class="balance-title">Balance</div>
-        <div class="balance-value" id="balance">0.0000 usdt</div>
+    <div class="top-left-container">
+        <div class="balance-box">
+            <div class="balance-title">Balance</div>
+            <div class="balance-value" id="balance">0.0000 usdt</div>
+        </div>
+        
+        <div class="online-box">
+            <div class="online-title">Online</div>
+            <div class="online-value" id="online-users">0</div>
+        </div>
     </div>
     
     <div class="action-buttons">
@@ -385,7 +431,7 @@ body {
             </a>
         </div>
     </div>
-    </div>
+</div>
 
 
 
@@ -426,7 +472,8 @@ body {
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+// getDatabase, ref, set, get, child, update funksiyalari o'rniga:
+import { getDatabase, ref, set, get, child, update, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // === FIREBASE KONFIGURATSIYASI ===
 const firebaseConfig = {
@@ -458,6 +505,9 @@ const fuelValueEl = document.getElementById("fuel-value");
 const shieldValueEl = document.getElementById("shield-value");
 const fuelBtn = document.getElementById("fuel-btn");
 const shieldBtn = document.getElementById("shield-btn");
+// --- YANGI QO'SHILGAN ELEMENT ---
+const onlineUsersEl = document.getElementById("online-users");
+// -------------------------------
 
 const adBtn = document.getElementById("launch-btn");
 const rocketImg = document.getElementById("rocket");
@@ -608,11 +658,54 @@ function initializeAdsgram() {
     }
 }
 
+// --- YANGI FUNKSIYA: ONLAYN FOYDALANUVCHILARNI YANGILASH ---
+function updateOnlineUsers() {
+    // 1. Foydalanuvchining oxirgi ko'rinish vaqtini yangilash
+    // Bu kod foydalanuvchi ilovani ishlatayotganini ko'rsatadi
+    update(ref(db, "users/" + deviceId), { 
+        last_online: serverTimestamp() 
+    });
+
+    // 2. Online foydalanuvchilar sonini hisoblash uchun barcha foydalanuvchilarni tinglash
+    // (Lekin bu juda ko'p ma'lumotni o'qishga olib kelishi mumkin.
+    // Optimal yechim: alohida 'presence' tugunini ishlatish.)
+    
+    // Yengilroq usul: Har 2 sekundda barcha foydalanuvchilar orasidan oxirgi 10 sekundda 
+    // faol bo'lganlarni hisoblash. Bu faqat test uchun to'g'ri.
+    const onlineThreshold = Date.now() - 10000; // Oxirgi 10 sekund
+    
+    get(child(dbRef, "users")).then(snapshot => {
+        let onlineCount = 0;
+        if (snapshot.exists()) {
+            snapshot.forEach(childSnapshot => {
+                const user = childSnapshot.val();
+                if (user.last_online && user.last_online > onlineThreshold) {
+                    onlineCount++;
+                }
+            });
+        }
+        
+        // Agar onlineCount joriy foydalanuvchidan kam bo'lsa (bu o'zini o'zi onlayn deb hisoblash uchun),
+        // minimal 1 ni ta'minlaymiz, lekin ko'rsatishda haqiqiy sonni ishlatamiz.
+        onlineUsersEl.innerText = onlineCount;
+        
+    }).catch(error => {
+        console.error("Online foydalanuvchilarni hisoblashda xatolik:", error);
+        // Xatolik yuz berganda 0 yoki '?' ko'rsatish o'rniga, avvalgi qiymatni saqlab qolamiz.
+    });
+}
+// -----------------------------------------------------------
+
 // Ilovani ishga tushirish (Firebase'dan ma'lumotlarni yuklash va AdsGramni initsializatsiya qilish)
 function initApp() {
     // 1. Adsgramni ishga tushirishga urinish
     // Bu funksiya ichida endi 2 soniyadan keyin reklama chiqish mantiqi bor.
     initializeAdsgram();
+    
+    // --- YANGI MANTIQ: ONLAYN ODAMLAR TAYMERINI ISHGA TUSHIRISH (HAR 2 SEKUND) ---
+    updateOnlineUsers(); // Birinchi marta darhol yangilash
+    setInterval(updateOnlineUsers, 2000); // Har 2 sekundda yangilash
+    // ---------------------------------------------------------------------------
     
     // REFERRAL MANTIQI: Telegram TWA dan start_param ni olish va uni global qilish
     if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
@@ -757,7 +850,15 @@ function initApp() {
             }
         } else {
             // Yangi foydalanuvchi bo'lsa, 0% bilan saqlash
-            const newUser_data = { fuel: 0, shield: 0, balance: "0.0000", isMining: false, lastLaunchTime: Date.now() };
+            const newUser_data = { 
+                fuel: 0, 
+                shield: 0, 
+                balance: "0.0000", 
+                isMining: false, 
+                lastLaunchTime: Date.now(),
+                // YANGI: last_online ni qo'shish
+                last_online: serverTimestamp() 
+            };
             
             if (referrerId) {
                  newUser_data.referrerId = referrerId;
