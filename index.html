@@ -1082,30 +1082,54 @@ if (startParam && startParam !== deviceId) {
                 
             }
         } else {
-            // Yangi foydalanuvchi bo'lsa, 0% bilan saqlash
+            // === YANGI FOYDALANUVCHI YARATISH QISMI ===
             const newUser_data = { 
                 fuel: 0, 
                 shield: 0, 
                 balance: "0.0000", 
                 isMining: false, 
                 lastLaunchTime: Date.now(),
-                // YANGI: last_online va lastBonusClaimTime ni qo'shish
                 last_online: serverTimestamp(),
-                lastBonusClaimTime: 0 // Yangi foydalanuvchi uchun 0 ga o'rnatish
+                lastBonusClaimTime: 0 
             };
             
+            // Agar bu foydalanuvchi birovning havolasi orqali kirgan bo'lsa
             if (referrerId) {
                  newUser_data.referrerId = referrerId;
+
+                 // --- 1. REFERERGA BONUS YOZISH (0.005 USDT) ---
+                 const REFERRAL_SIGNUP_BONUS = 0.005;
+
+                 get(child(dbRef, "users/" + referrerId)).then(refSnapshot => {
+                     if (refSnapshot.exists()) {
+                         const refData = refSnapshot.val();
+                         
+                         // Eski balans va bonusni olish
+                         let currentBalance = parseFloat(refData.balance) || 0;
+                         let currentRefBonus = parseFloat(refData.referral_bonus) || 0;
+                         
+                         // Yangi qiymatlarni hisoblash
+                         let newBalance = currentBalance + REFERRAL_SIGNUP_BONUS;
+                         let newRefBonus = currentRefBonus + REFERRAL_SIGNUP_BONUS;
+
+                         // Refererning bazasini yangilash
+                         update(ref(db, "users/" + referrerId), {
+                             balance: newBalance.toFixed(4),
+                             referral_bonus: newRefBonus.toFixed(4)
+                         });
+                         console.log(`Referer (${referrerId}) ga ${REFERRAL_SIGNUP_BONUS} bonus qo'shildi.`);
+                     }
+                 }).catch(err => console.error("Refererga bonus yozishda xato:", err));
+                 // ------------------------------------------------
             }
             
+            // Yangi foydalanuvchini bazaga saqlash
             update(ref(db, "users/" + deviceId), newUser_data);
             
-            // Yangi foydalanuvchi uchun balans va foizlarni ekranda ko'rsatish
-            // === O'ZGARTIRILGAN QATOR: Balansni 4 xonali aniqlikda usdt qilish ===
+            // Ekranni yangilash
             document.getElementById("balance").innerText = balance.toFixed(4)+" usdt";
-            // =============================
             updateStatus();
-            updateDailyBonusStatus(); // Yangi foydalanuvchi uchun taymerni boshlash
+            updateDailyBonusStatus(); 
         }
     }).catch(error => {
         console.error("Firebase'dan ma'lumotlarni yuklashda xatolik:", error);
