@@ -159,7 +159,7 @@
             <div class="stat-label">Taklif qilinganlar</div>
         </div>
         <div class="stat-box">
-            <div class="stat-value" id="referral-bonus">0.00 usdt</div>
+            <div class="stat-value" id="referral-bonus">0.00000 usdt</div>
             <div class="stat-label">Umumiy daromad (1% mining komissiyasi)</div> </div>
     </div>
 
@@ -285,7 +285,7 @@ async function loadReferrals() {
 
     // BONUS ko'rsatish (Endi Firebase'dan olingan totalBonus ishlatiladi)
     // Va doimo usdt ko'rinishida formatlash
-    document.getElementById("referral-bonus").innerText = totalBonus.toFixed(4) + " usdt";
+    document.getElementById("referral-bonus").innerText = totalBonus.toFixed(5) + " usdt";
 }
 
 window.onload = loadReferrals;
