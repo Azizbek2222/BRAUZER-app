@@ -372,11 +372,11 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 // onValue va set qo'shildi
 import { getDatabase, ref, get, child, update, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// === FIREBASE KONFIGURATSIYASI (Index.html dagi bilan bir xil) ===
+// === FIREBASE KONFIGURATSIYASI (Realtime Database ga mos) ===
 const firebaseConfig = {
   apiKey: "AIzaSyDIeG8dVbm0Yk7FR1hPzrBoD7rgDKWAFoY",
   authDomain: "user1111-c84a0.firebaseapp.com",
-  databaseURL: "https://user1111-c84a0-default-rtdb.firebaseio.com",
+  databaseURL: "https://user1111-c84a0-default-rtdb.firebaseio.com", // Realtime Database URL
   projectId: "user1111-c84a0",
   storageBucket: "user1111-c84a0.appspot.com",
   messagingSenderId: "901723757936",
@@ -408,7 +408,7 @@ let isMiningPausedForAd = false; // Mining reklama uchun to'xtatilganmi
 let totalMined = 0; // Jami ishlangan pulni saqlash
 let onlineUsers = 0; // Online foydalanuvchilar soni
 // === ADMIN TEKSHIRUVI UCHUN YANGI GLOBAL O'ZGARUVCHI ===
-let isAdminStopped = false;
+let isAdminStopped = false; 
 
 // === DOM ELEMENTLARI ===
 const balanceValueEl = document.getElementById("balance-value");
@@ -425,7 +425,7 @@ const minerStatusBoxEl = document.getElementById("miner-status-box");
 
 let AdController = null; 
 
-// === ADSGRAM FUNKSIYALARI (Qolgan qismi o'zgarishsiz) ===
+// === ADSGRAM FUNKSIYALARI (O'zgarishsiz) ===
 function initializeAdsgram() {
     if (window.Adsgram && !AdController) {
         // Index.html dagi blok IDsi bilan ishga tushirish
@@ -438,43 +438,38 @@ function initializeAdsgram() {
 
 /**
  * Reklamani ko'rsatadi va uning tugashini kutadi.
- * @returns {Promise<boolean>} Reklama muvaffaqiyatli ko'rsatilsa/tugasa true, aks holda false.
  */
 async function showAd() {
     if (!window.Adsgram || !AdController) {
         console.error("Adsgram ishga tushirilmagan (Brauzer rejimida).");
-        // FIX: Agar Adsgram mexanizmi ishlamasa, FALSE qaytaramiz.
         miningStatusEl.innerText = "Ad Service Unavailable ❌"; 
         miningStatusEl.style.color = "#ff5722"; 
-        isMiningPausedForAd = false; // Aslida to'xtatilmagan, shunchaki ishga tushmadi
+        isMiningPausedForAd = false; 
         return false; 
     }
     
-    // Miningni to'xtatish (agar ishlayotgan bo'lsa)
     stopMining(false); 
-    isMiningPausedForAd = true; // Reklama uchun to'xtatilgan deb belgilaymiz
+    isMiningPausedForAd = true; 
 
     miningStatusEl.innerText = "Ad is showing... 📺";
-    miningStatusEl.style.color = "#ffcc00"; // Sariq rang
+    miningStatusEl.style.color = "#ffcc00"; 
     
     try {
         await AdController.show();
         console.log("Reklama muvaffaqiyatli ko'rsatildi.");
-        return true; // Muvaffaqiyat
+        return true; 
     } catch (err) { 
         console.error("Reklama ko'rsatishda xatolik yoki foydalanuvchi o'tkazib yubordi:", err);
-        // Reklama serveri xatosi yoki foydalanuvchi yopgan bo'lsa ham (real appda davom ettirish uchun)
         return true; 
     } finally {
-        isMiningPausedForAd = false; // Reklama jarayoni tugadi
+        isMiningPausedForAd = false; 
     }
 }
 // =============================
 
-// === MINING LOGIKASI ===
+// === MINING LOGIKASI (O'zgarishsiz) ===
 
 async function updateMining() {
-    // Agar reklama uchun to'xtatilgan bo'lsa, pul qo'shilmaydi
     if (isMiningPausedForAd) {
         return; 
     }
@@ -492,31 +487,22 @@ async function updateMining() {
     // 3. Reklama triggerini tekshirish
     if (earnedSinceLastAd >= AD_TRIGGER_AMOUNT) {
         
-        // **Muhim:** Reklama chiqishi kerak bo'lgan pul miqdori yig'ildi.
-        // Miningni to'xtatish va pulni saqlash.
-        stopMining(false); // Avtomatik to'xtatish (userInitiated=false)
+        stopMining(false); 
         
         miningStatusEl.innerText = "Reward reached! Saving balance... 💰";
         
-        // Pulni Firebase'ga saqlash (shaxsiy balans va global stat)
         await saveBalanceToFirebase();
         
-        // Reklamani ko'rsatish funksiyasini chaqirish
         const adShown = await showAd(); 
         
-        // Reklama tugagandan so'ng (muvaffaqiyatli yoki muvaffaqiyatsiz)
         if (adShown) {
-            earnedSinceLastAd = 0; // Hisoblagichni 0 ga qaytarish
+            earnedSinceLastAd = 0; 
             progressValueEl.innerText = `${earnedSinceLastAd.toFixed(6)} / ${AD_TRIGGER_AMOUNT.toFixed(6)} USDT`;
 
-            // Miningni avtomatik davom ettirish
             startMining();
         } else {
-             // FIX: Agar showAd() FALSE qaytarsa (ya'ni, brauzerda yoki xizmat mavjud bo'lmasa)
-             // miningni qayta ishga tushirmaymiz.
              miningStatusEl.innerText = "Ad failed. Click Start to retry. ⚠️";
-             miningStatusEl.style.color = "#ffeb3b"; // Sariq rang
-             // earnedSinceLastAd bu yerda saqlanib qoladi, keyingi urinishda yana saqlanadi
+             miningStatusEl.style.color = "#ffeb3b"; 
         }
     }
 }
@@ -529,7 +515,7 @@ function startMining() {
     if (isAdminStopped) {
         console.log("Mining blocked by Admin Control. Cannot start.");
         // UI ni admin to'xtatgan holatda ushlab turish
-        handleMiningControl('stopped', controlMessageEl.innerText || "Ma'mur tomonidan to'xtatilgan. Qayta ishga tushirish imkoni yo'q.");
+        handleMiningControl('stopped', controlMessageEl.innerText || "Ma'mur tomonidan to'xtatilgan. Qayta ishga tushirish imkoni yo'q."); 
         return; // Ishga tushirishga ruxsat bermaslik
     }
     // === TEKSHIRUV YAKUNI ===
@@ -609,19 +595,19 @@ function listenForGlobalStats() {
 }
 
 
-// === ADMIN BOSHQARUVINI TINGLASH FUNKSIYASI ===
+// === ADMIN BOSHQARUVINI TINGLASH FUNKSIYASI (Realtime Listening) ===
 
 /**
  * Admin panelidan kelgan boshqaruv xabarini tinglaydi va unga javob beradi.
  */
-function listenForAdminControl() {
-    onValue(ref(db, "stats/mining_control"), (snapshot) => {
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            handleMiningControl(data.status, data.message);
+function listenForAdminControl() { 
+    onValue(ref(db, "stats/mining_control"), (snapshot) => { 
+        if (snapshot.exists()) { 
+            const data = snapshot.val(); 
+            handleMiningControl(data.status, data.message); 
         } else {
              // Agar tugun o'chirilgan bo'lsa (default holat - ishlashi kerak)
-             handleMiningControl('running', '');
+             handleMiningControl('running', ''); 
         }
     });
 }
@@ -631,35 +617,33 @@ function listenForAdminControl() {
  * @param {string} status - 'running' yoki 'stopped'
  * @param {string} message - Foydalanuvchiga ko'rsatiladigan xabar
  */
-function handleMiningControl(status, message) {
+function handleMiningControl(status, message) { 
     if (status === 'stopped') {
         isAdminStopped = true; // Miningni ishga tushirishga ruxsat bermaslik
         
         // 1. Miningni to'xtatish (agar ishlayotgan bo'lsa)
-        if (miningInterval) {
+        if (miningInterval) { 
             stopMining(false); // Avtomatik to'xtatish
             saveBalanceToFirebase(); // Balansni saqlash
         }
 
         // 2. Tugmalarni va Mining Statusni yashirish
-        miningToggleBtn.style.display = 'none';
-        minerStatusBoxEl.style.display = 'none';
+        miningToggleBtn.style.display = 'none'; 
+        minerStatusBoxEl.style.display = 'none'; 
         
         // 3. Xabarni ko'rsatish
-        controlMessageEl.innerText = message || "Ma'mur tomonidan to'xtatildi.";
-        controlMessageEl.style.display = 'block';
+        controlMessageEl.innerText = message || "Ma'mur tomonidan to'xtatildi."; 
+        controlMessageEl.style.display = 'block'; 
 
     } else { // status === 'running'
         isAdminStopped = false; // Miningni ishga tushirishga ruxsat berish
         
         // 1. Tugmalarni va Mining Statusni ko'rsatish
-        miningToggleBtn.style.display = 'block';
-        minerStatusBoxEl.style.display = 'block';
+        miningToggleBtn.style.display = 'block'; 
+        minerStatusBoxEl.style.display = 'block'; 
         
         // 2. Xabarni yashirish
-        controlMessageEl.style.display = 'none';
-        
-        // Agar admin qayta ishga tushirgan bo'lsa va foydalanuvchi to'xtatmagan bo'lsa, avtomatik boshlash shart emas. Foydalanuvchi "Start"ni bosishi kerak.
+        controlMessageEl.style.display = 'none'; 
     }
 }
 // === FUNKSIYALAR YAKUNI ===
