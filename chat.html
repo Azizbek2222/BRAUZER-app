@@ -357,6 +357,11 @@
             <button id="go-live-btn" onclick="startLiveStream()">Jonli efirni boshlash</button>
         </div>
     </div>
+    
+    <div id="live-video-container" style="display:none; margin-bottom: 10px; background: black; border-radius: 8px; overflow: hidden;">
+        <video id="localVideo" autoplay muted style="width: 100%; max-height: 250px; display: block;"></video> 
+        <video id="remoteVideo" autoplay style="width: 100%; max-height: 250px; display: block; border-top: 2px solid #555;"></video>
+    </div>
     <ul id="chat-messages">
         </ul>
     
@@ -406,11 +411,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-// const storage = getStorage(app); // Storage o'chirildi
 const chatRef = ref(db, 'chats/global_chat'); 
 const blockedRef = ref(db, 'blocked_users');
 
-// === YAXSHILANGAN ONLINE/LIVE REF'LAR QO'SHILDI ===
 const liveStreamRef = ref(db, 'live_stream/current_stream');
 const onlineUsersRef = ref(db, 'online_users'); // Online foydalanuvchilar ro'yxati
 
@@ -422,13 +425,9 @@ if(!deviceId){
 }
 const currentUsername = deviceId.substring(0, 8); // Foydalanuvchi nomi
 
-// === ONLINE HOLATINI BOSHQARISH (QO'SHILDI) ===
+// === ONLINE HOLATINI BOSHQARISH ===
 const userOnlineRef = ref(db, `online_users/${deviceId}`);
-
-// Ulanish uzilganda foydalanuvchini online ro'yxatidan olib tashlash
 onDisconnect(userOnlineRef).remove();
-
-// Foydalanuvchini online ro'yxatiga qo'shish
 set(userOnlineRef, {
     username: currentUsername,
     last_seen: serverTimestamp()
@@ -459,9 +458,155 @@ onValue(blockedRef, (snapshot) => {
     checkBlockStatus(snapshot);
 });
 
-// === LIVE STREAM MANTIQI (QO'SHILDI) ===
 
+// === WEBRTC UCHUN QO'SHIMCHA O'ZGARUVCHILAR ===
 let currentLiveStreamer = null;
+let localStream;
+let peerConnection;
+
+// GOOGLE'NING BEPUL STUN SERVERI KONFIGURATSIYASI
+const servers = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' } // Ulanish manzillarini topish uchun
+        // Agar aloqa o'rnatilmasa, TURN serverlari talab qilinishi mumkin.
+    ]
+};
+
+const liveVideoContainer = document.getElementById('live-video-container');
+const localVideo = document.getElementById('localVideo');
+const remoteVideo = document.getElementById('remoteVideo');
+const signalingRef = ref(db, 'live_stream/signaling');
+
+// === 1. LOKAL MEDIA ULANISHINI OCHISH ===
+async function startLocalStream() {
+    try {
+        // Kamera va mikrofonni so'rash
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); 
+        localVideo.srcObject = localStream;
+        liveVideoContainer.style.display = 'block';
+        return localStream;
+    } catch (err) {
+        console.error("Kamera/Mikrofonni ochishda xato: ", err);
+        alert("Kamera va mikrofonni yoqishga ruxsat bering. Jonli efir ishlamasligi mumkin. Xato: " + err.name);
+        return null;
+    }
+}
+
+// === 2. WEBRTC PEER CONNECTION NI O'RNATISH ===
+function createPeerConnection(isCaller) {
+    // Agar ulanish mavjud bo'lsa, uni tozalash
+    if (peerConnection) {
+        peerConnection.close();
+    }
+
+    peerConnection = new RTCPeerConnection(servers);
+
+    // 2.1. Lokalda mikrofon/kameradan olingan ma'lumotni ulanishga qo'shish
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+    }
+
+    // 2.2. Uzoqdan kelayotgan streamni tinglash (Remote)
+    peerConnection.ontrack = (event) => {
+        if (remoteVideo.srcObject !== event.streams[0]) {
+            remoteVideo.srcObject = event.streams[0];
+        }
+    };
+
+    // 2.3. ICE Kandidatlarini Firebase orqali almashish (Signaling)
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            // ICE kandidatlarini Firebase ga yuborish
+            const candidateRef = ref(db, `live_stream/signaling/${isCaller ? 'caller' : 'callee'}/candidates`);
+            push(candidateRef, {
+                candidate: event.candidate.toJSON(),
+                sender: deviceId
+            });
+        }
+    };
+    
+    return peerConnection;
+}
+
+
+// === 3. SIGNALLARNI TINGLASH VA QABUL QILISH ===
+onValue(signalingRef, async (snapshot) => {
+    const data = snapshot.val() || {};
+    
+    if (!peerConnection && currentLiveStreamer && currentLiveStreamer !== deviceId) {
+        // Agar efir bor bo'lsa, lekin ulanish yo'q bo'lsa (Misol: Join tugmasi bosildi)
+        await startLocalStream();
+        createPeerConnection(false); // Callee sifatida yaratish
+    }
+    
+    if (!peerConnection) return; 
+
+    // 3.1. Taklif (Offer) kelganini tekshirish (Qo'shiluvchilar (callees) uchun)
+    if (data.offer && data.offer.user_id !== deviceId && peerConnection.remoteDescription?.type !== 'offer') {
+        
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer.sdp));
+        
+        // Javob (Answer) yaratish
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        // Javobni Firebase ga yuborish
+        await set(ref(db, `live_stream/signaling/answer`), {
+            sdp: peerConnection.localDescription.toJSON(),
+            user_id: deviceId
+        });
+        
+        // Offer tugunini tozalash (faqat bitta qatnashuvchiga javob berish uchun)
+        // remove(ref(db, `live_stream/signaling/offer`)); // Katta chatda bu muammo tug'dirishi mumkin
+    }
+
+    // 3.2. Javob (Answer) kelganini tekshirish (Efirni boshlovchilar (callers) uchun)
+    if (data.answer && data.answer.user_id !== deviceId && peerConnection.remoteDescription?.type !== 'answer') {
+        const answer = new RTCSessionDescription(data.answer.sdp);
+        await peerConnection.setRemoteDescription(answer);
+        // remove(ref(db, `live_stream/signaling/answer`)); // Katta chatda bu muammo tug'dirishi mumkin
+    }
+    
+    // 3.3. ICE Kandidatlarini tinglash (Caller va Callee uchun)
+    const callerCandidates = data.caller?.candidates;
+    if (callerCandidates) {
+        Object.keys(callerCandidates).forEach(async (key) => {
+             const candidateData = callerCandidates[key];
+             if (candidateData.sender !== deviceId) {
+                 try {
+                     const candidate = new RTCIceCandidate(candidateData.candidate);
+                     await peerConnection.addIceCandidate(candidate);
+                     // O'chirish
+                     remove(ref(db, `live_stream/signaling/caller/candidates/${key}`));
+                 } catch (e) {
+                     console.warn("Caller ICE kandidatini qo'shishda xato:", e);
+                 }
+            }
+        });
+    }
+
+    const calleeCandidates = data.callee?.candidates;
+    if (calleeCandidates) {
+        Object.keys(calleeCandidates).forEach(async (key) => {
+             const candidateData = calleeCandidates[key];
+             if (candidateData.sender !== deviceId) {
+                 try {
+                     const candidate = new RTCIceCandidate(candidateData.candidate);
+                     await peerConnection.addIceCandidate(candidate);
+                     // O'chirish
+                     remove(ref(db, `live_stream/signaling/callee/candidates/${key}`));
+                 } catch (e) {
+                     console.warn("Callee ICE kandidatini qo'shishda xato:", e);
+                 }
+            }
+        });
+    }
+});
+
+
+// === LIVE STREAM MANTIQI (HOLATNI BOSHQARISH) ===
 
 onValue(liveStreamRef, (snapshot) => {
     const liveData = snapshot.val();
@@ -476,6 +621,14 @@ onValue(liveStreamRef, (snapshot) => {
         joinBtn.style.display = 'none';
         goLiveBtn.innerText = "Jonli efirni boshlash";
         goLiveBtn.disabled = false;
+        
+        // Agar efir to'xtatilsa barcha WebRTC resurslarini tozalash
+        if (localStream) { localStream.getTracks().forEach(track => track.stop()); }
+        if (peerConnection) { peerConnection.close(); peerConnection = null; }
+        localVideo.srcObject = null;
+        remoteVideo.srcObject = null;
+        liveVideoContainer.style.display = 'none';
+        
         return;
     }
     
@@ -500,50 +653,69 @@ onValue(liveStreamRef, (snapshot) => {
         goLiveBtn.innerText = "Jonli efirni boshlash";
         goLiveBtn.disabled = true; // Boshqa birov efirda bo'lsa boshlay olmasin
         joinBtn.style.display = 'inline';
-        
-        // O'zidan oldingi onDisconnectni olib tashlash kerak (agar o'zi boshlagan bo'lsa)
-        // Shuning uchun, bu yerda onDisconnect funksiyasini qayta chaqirish orqali uni o'chira olmaymiz, 
-        // Lekin agar oldin efir qilmagan bo'lsa muammo yo'q.
     }
 });
 
 
-window.startLiveStream = function() {
+// Jonli efirni boshlash (CALLER MANTIQI)
+window.startLiveStream = async function() {
     if (isUserBlocked) return;
     
     if (currentLiveStreamer === deviceId) {
-        // Efirni tugatish
-        remove(liveStreamRef)
-            .then(() => alert("Jonli efir tugatildi."))
-            .catch(error => console.error("Efirni tugatishda xato:", error));
+        // Efirni tugatish mantig'i onValue dagi if(!liveData) ichida joylashgan
+        await remove(liveStreamRef);
+        await remove(signalingRef); // Signaling tugunini ham tozalash
     } else {
         // Yangi efirni boshlash
+        const stream = await startLocalStream(); // 1. O'z kamerasini yoqish
+        if (!stream) return;
+        
+        createPeerConnection(true); // 2. PeerConnection yaratish (Bu Caller)
+        
+        // 3. Taklif (Offer) yaratish
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        // 4. Offer ni Firebase ga yuborish
         const liveData = {
             user_id: deviceId,
             username: currentUsername,
             start_time: serverTimestamp(),
-            // WebRTC uchun kerakli boshqa ma'lumotlar bu yerga qo'shilishi mumkin (masalan, session ID)
         };
         
         set(liveStreamRef, liveData)
-            .then(() => alert("Jonli efir boshlandi! Eslatma: Haqiqiy video/audio stream uchun WebRTC integratsiyasi talab qilinadi."))
+            .then(() => {
+                // Offer ni signaling tuguniga yozish
+                set(ref(db, `live_stream/signaling/offer`), {
+                    sdp: peerConnection.localDescription.toJSON(),
+                    user_id: deviceId
+                });
+                // Alertni olib tashladim, holat avtomatik o'zgaradi
+            })
             .catch(error => console.error("Efirni boshlashda xato:", error));
     }
 }
 
-window.joinLiveStream = function() {
+
+// Jonli efirga qo'shilish (CALLEE MANTIQI)
+window.joinLiveStream = async function() {
     if (isUserBlocked) return;
     
     if (currentLiveStreamer) {
-        alert(`Siz hozir ${currentLiveStreamer} tomonidan boshlangan jonli efirga qo'shildingiz!
+        const stream = await startLocalStream(); // 1. O'z kamerasini yoqish (agar u ham uzatmoqchi bo'lsa)
+        if (!stream) return;
         
-        ESLATMA: Haqiqiy WebRTC ulanish o'rnatilishi va videoni ko'rish uchun qo'shimcha JavaScript kodi va WebRTC serverlari kerak bo'ladi.`);
+        createPeerConnection(false); // 2. PeerConnection yaratish (Bu Callee)
         
-        // **!!! BU YERDA HAQIQIY WEBRTC ULANISH MANTIQI BO'LISHI KERAK !!!**
+        alert("Jonli efirga ulanish jarayoni boshlandi. Videoni kutib turing.");
+
+        // Callee sifatida u offerni Firebase'dan olganidan so'ng avtomatik javob (answer) yuboradi (onValue dagi mantiqqa qarang).
+        
     } else {
         alert("Hozirda faol jonli efir mavjud emas.");
     }
 }
+
 
 // === CONSTANTS ===
 const VERIFIED_ICON_URL = "galochka.png";
@@ -565,6 +737,9 @@ window.displayFileName = function() {
 }
 
 // === REPLY FUNKSIYALARI ===
+let replyingToId = null;
+let replyingToText = null;
+
 window.setReply = function(id, text) {
     if (isUserBlocked) return;
     
@@ -615,9 +790,7 @@ function renderMessage(key, message, isMine) {
     }
     
     let imageHtml = '';
-    // ENDI message.imageUrl emas, message.imageBase64Data tekshiriladi
     if (message.imageBase64Data) {
-        // Base64 ma'lumotini to'g'ridan-to'g'ri src ga berish
         imageHtml = `<img src="${message.imageBase64Data}" class="message-image" alt="Yuborilgan rasm">`;
     }
 
@@ -643,7 +816,6 @@ function fileToBase64(file) {
             return resolve(null);
         }
         
-        // Realtime Database ning 10MB limitini hisobga olgan holda maksimal 7MB rasmga ruxsat berish.
         const MAX_FILE_SIZE = 7 * 1024 * 1024; 
         if (file.size > MAX_FILE_SIZE) {
             reject(new Error("Fayl juda katta (Maks. 7MB). Realtime Database katta hajmdagi fayllarni qo'llab-quvvatlamaydi. Iltimos, kichikroq rasm tanlang."));
@@ -651,9 +823,9 @@ function fileToBase64(file) {
         }
 
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result); // Base64 ma'lumotini qaytaradi
+        reader.onload = () => resolve(reader.result); 
         reader.onerror = error => reject(error);
-        reader.readAsDataURL(file); // Faylni Base64 Data URL formatida o'qish
+        reader.readAsDataURL(file); 
     });
 }
 
@@ -672,30 +844,27 @@ window.sendMessage = async function() {
 
     if (messageText === "" && !imageFile) return;
 
-    let base64Data = null; // Yangi o'zgaruvchi Base64 ma'lumotni saqlaydi
+    let base64Data = null; 
     const sendBtn = document.getElementById('send-btn');
     
     if (imageFile) {
         
-        sendBtn.disabled = true; // Rasm Base64 ga o'tkazilayotganda tugmani o'chirish
+        sendBtn.disabled = true; 
         
         try {
-            // Rasm faylini Base64 formatida o'qish
             base64Data = await fileToBase64(imageFile);
             
         } catch (error) {
-            alert(error.message); // Fayl hajmi limiti yoki o'qish xatosi
+            alert(error.message); 
             sendBtn.disabled = false;
             return; 
         }
     }
     
-    // Agar Base64 konversiyasi muvaffaqiyatli bo'lsa yoki matn mavjud bo'lsa, xabarni yuborish
     const newMessage = {
         user_id: deviceId, 
-        username: currentUsername, // currentUsername dan foydalanish
+        username: currentUsername, 
         text: messageText,
-        // Base64 ma'lumotini saqlash
         imageBase64Data: base64Data, 
         timestamp: serverTimestamp(),
         isAdmin: false,
@@ -707,7 +876,7 @@ window.sendMessage = async function() {
         .then(() => {
             inputEl.value = '';
             imageInputEl.value = '';
-            window.displayFileName(); // Indikatorni tozalash
+            window.displayFileName(); 
             clearReply();
             sendBtn.disabled = false;
         })
