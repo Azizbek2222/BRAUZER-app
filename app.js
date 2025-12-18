@@ -42,7 +42,7 @@ const referrerId = getReferrerId();
 function sendTelegramNotification() {
     const botToken = "8106213930:AAHzObkRHkBIQObLxMPW-Ctl0WMFbmpupmI"; // Bu yerga botingiz tokenini yozing
     const chatId = userId.replace("tg_", "");
-    const message = "🚀 <b>Vaqt bo'ldi!</b>\n\nRaketangiz tayyor. Tezroq ilovaga kiring va o'z mukofotingizni claim qiling!";
+    const message = "🚀 <b>It's time!</b>\n\nYour rocket is ready. Hurry up and log in to the app to claim your prize!";
 
     if (!isNaN(chatId)) {
         fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
