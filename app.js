@@ -28,7 +28,7 @@ function getUserId() {
 const userId = getUserId();
 const botToken = "8106213930:AAHzObkRHkBIQObLxMPW-Ctl0WMFbmpupmI";
 
-// Adsgram kontrollerini yaratish (Eski usul o'zgartirildi)
+// REKLAMA QISMI: blockId aniq "int-19304" ko'rinishida bo'lishi shart
 const AdController = window.Adsgram ? window.Adsgram.init({ blockId: "int-19304" }) : null;
 
 function getReferrerId() {
@@ -69,14 +69,12 @@ async function checkFirstTimeEntry() {
 }
 
 async function handleClaim() {
-    // Reklama kontrolleri mavjudligini tekshirish
     if (!AdController) {
-        window.Telegram.WebApp.showAlert("Reklama tizimi yuklanmadi. Iltimos, sahifani yangilang.");
+        window.Telegram.WebApp.showAlert("Reklama yuklanmadi. Iltimos, bir oz kuting yoki sahifani yangilang.");
         return;
     }
 
     try {
-        // Reklamani ko'rsatish
         const result = await AdController.show();
         
         if (result && result.done) {
@@ -146,7 +144,7 @@ async function handleClaim() {
             window.Telegram.WebApp.showAlert("Mukofot olish uchun reklamani oxirigacha ko'rishingiz kerak.");
         }
     } catch (e) { 
-        window.Telegram.WebApp.showAlert("Reklama yuklanmadi yoki bekor qilindi!"); 
+        window.Telegram.WebApp.showAlert("Hozircha reklama mavjud emas. Bir ozdan keyin urinib ko'ring."); 
         console.error(e); 
     }
 }
