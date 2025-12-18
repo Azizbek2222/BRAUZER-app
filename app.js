@@ -6,7 +6,7 @@ const firebaseConfig = {
     authDomain: "user1111-c84a0.firebaseapp.com",
     databaseURL: "https://user1111-c84a0-default-rtdb.firebaseio.com",
     projectId: "user1111-c84a0",
-    storageBucket: "user1111-c84a0.firebasestorage.app", // Yangilandi
+    storageBucket: "user1111-c84a0.firebasestorage.app",
     messagingSenderId: "901723757936",
     appId: "1:901723757936:web:9da0a1c7ec494f4a0c03b5"
 };
@@ -46,7 +46,7 @@ async function handleClaim() {
             const userRef = ref(db, 'users/' + userId);
             const snapshot = await get(userRef);
             const now = Date.now();
-            const reward = 1.0001;
+            const reward = 0.0001;
             const bonusPercent = 0.02; // 2% bonus
 
             if (snapshot.exists()) {
@@ -74,15 +74,17 @@ async function handleClaim() {
                     }
                 }
             } else {
-                // Yangi foydalanuvchi birinchi marta kirganda
+                // Yangi foydalanuvchi birinchi marta kirganda (Referalni ro'yxatga olish)
                 await set(userRef, { 
                     balance: reward, 
                     lastClaim: now,
-                    invitedBy: referrerId // Kim taklif qilganini saqlash
+                    invitedBy: referrerId, // Kim taklif qilganini saqlash
+                    referralCount: 0,
+                    referralEarnings: 0
                 });
 
-                // Taklif qilgan odamning referal sonini oshirish
-                if (referrerId) {
+                // Taklif qilgan odamning (Referrer) statistikasini yangilash
+                if (referrerId && referrerId !== userId) {
                     const bossRef = ref(db, 'users/' + referrerId);
                     const bossSnap = await get(bossRef);
                     if (bossSnap.exists()) {
@@ -107,7 +109,8 @@ function startRocketAnimation() {
 }
 
 async function loadUserData() {
-    const snapshot = await get(ref(db, 'users/' + userId));
+    const userRef = ref(db, 'users/' + userId);
+    const snapshot = await get(userRef);
     if (snapshot.exists()) {
         const data = snapshot.val();
         document.getElementById('balance').innerText = (data.balance || 0).toFixed(4) + " TON";
