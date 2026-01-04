@@ -37,7 +37,7 @@ let AdseroController = null;
 if (window.Adsero) {
     AdseroController = window.Adsero;
 } else {
-    console.log("Adsero SDK yuklanmadi");
+    console.log("Adsero SDK failed to load");
 }
 
 function getReferrerId() {
